@@ -44,11 +44,16 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
+#include <llvm/IR/Constant.h>
 
 #include <algorithm>
 #include <cassert>
 #include <memory>
 #include <vector>
+
+int fuck(){
+	return 1000;
+}
 
 using namespace llvm;
 
@@ -103,14 +108,22 @@ int main() {
 	builder.SetInsertPoint(BB);
 	
 	// Get pointer to the constant `10'.
-	Value *Ten = builder.getInt32(10);
+//	Value *Ten = builder.getInt32(10);
+	{
+			
+		auto FT = FunctionType::get(builder.getInt32Ty(), {}, false);
+		auto FuncAddr = builder.getInt64((size_t)fuck);
+		auto F = builder.CreateIntToPtr(FuncAddr, FT->getPointerTo());
+		auto val = builder.CreateCall(F);
+		CallInst *Add1CallRes = builder.CreateCall(Add1F, val);
+		Add1CallRes->setTailCall(true);
+		builder.CreateRet(Add1CallRes);
+	}
+	outs() << *Owner;
 	
 	// Pass Ten to the call to Add1F
-	CallInst *Add1CallRes = builder.CreateCall(Add1F, Ten);
-	Add1CallRes->setTailCall(true);
 	
 	// Create the return instruction and add it to the basic block.
-	builder.CreateRet(Add1CallRes);
 	
 	///////////////////
 	auto kjit_ = orc::KaleidoscopeJIT::Create();
