@@ -51,7 +51,7 @@
 #include <memory>
 #include <vector>
 
-int fuck(){
+int fuck() {
 	return 1000;
 }
 
@@ -110,9 +110,8 @@ int main() {
 	// Get pointer to the constant `10'.
 //	Value *Ten = builder.getInt32(10);
 	{
-			
 		auto FT = FunctionType::get(builder.getInt32Ty(), {}, false);
-		auto FuncAddr = builder.getInt64((size_t)fuck);
+		auto FuncAddr = builder.getInt64((size_t) fuck);
 		auto F = builder.CreateIntToPtr(FuncAddr, FT->getPointerTo());
 		auto val = builder.CreateCall(F);
 		CallInst *Add1CallRes = builder.CreateCall(Add1F, val);
@@ -132,10 +131,38 @@ int main() {
 	assert(kjit);
 	auto err = kjit->addModule(std::move(Owner));
 	outs() << err;
+	assert(!err);
 	auto es = kjit->lookup("foo");
 	assert(es);
-	auto f = reinterpret_cast<int(*)()>(es->getAddress());
+	auto f = reinterpret_cast<int (*)()>(es->getAddress());
 	outs() << "result = " << f();
+	
+	{
+		auto mod = make_unique<Module>("wtf", Context);
+		auto fb = cast<Function>(
+				mod->getOrInsertFunction("exec", Type::getInt32PtrTy(Context), Type::getInt32PtrTy(Context)));
+		assert(fb);
+		auto bb = BasicBlock::Create(Context, "body", fb);
+		builder.SetInsertPoint(bb);
+		auto arg1 = &*fb->arg_begin();
+		auto valptr = builder.CreateConstGEP1_32(arg1, 0);
+		auto val = builder.CreateLoad(valptr);
+		builder.CreateStore(builder.CreateAdd(val, builder.getInt32(1)), valptr);
+		builder.CreateRet(val);
+		outs() << "---------------------";
+		outs() << *mod;
+		auto err = kjit->addModule(std::move(mod));
+		assert(!err);
+	}
+	
+	auto func = reinterpret_cast<int (*)(int*)>(cantFail(kjit->lookup("exec")).getAddress());
+	int hhh[32] = {};
+	outs() << func(hhh);
+	outs() << func(hhh);
+	outs() << func(hhh);
+	outs() << func(hhh);
+	outs() << func(hhh);
+	outs() << hhh[0];
 	return 0;
 }
 
