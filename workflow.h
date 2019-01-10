@@ -80,6 +80,10 @@ public:
 		}
 	}
 	
+	Value *get_mem_ptr(uint32_t paddr) {
+		return builder_.CreateConstGEP1_32(s_.memory, paddr);
+	}
+	
 	Value *get_value(rtlreg_t *reg) {
 		if (auto reg_id = is_cpu(reg)) {
 			int id = reg_id.value();
@@ -97,13 +101,13 @@ public:
 	}
 	
 	void finish_inst() {
-	    s_.inst_count++;
+		s_.inst_count++;
 	}
 	
 	void finish_block() {
 		for (int id = 0; id < s_.reg_cache.size(); ++id) {
-			auto [value, dirty] = s_.reg_cache[id];
-			if(dirty){
+			auto[value, dirty] = s_.reg_cache[id];
+			if (dirty) {
 				auto reg_ptr = get_cpu_reg_ptr(id);
 				builder_.CreateStore(value, reg_ptr);
 			}
@@ -112,17 +116,17 @@ public:
 		auto err = jit_->addModule(std::move(s_.mod));
 		assert(!err);
 		auto uid = s_.uid;
-		assert(uid != (uint64_t)-1);
+		assert(uid != (uint64_t) -1);
 		assert(icache.count(uid) == 0);
 		auto symbol = this->jit_->lookup(get_name(uid));
-		icache[uid].first = (RawFT)cantFail(std::move(symbol)).getAddress();
+		icache[uid].first = (RawFT) cantFail(std::move(symbol)).getAddress();
 		icache[uid].second = s_.inst_count;
 		s_.clear();
 	}
 	
 	std::optional<std::pair<RawFT, int>> fetchFunction(uint32_t cr3, uint32_t vaddr) {
 		auto uid = get_uid(cr3, vaddr);
-		if(icache.count(uid) == 0){
+		if (icache.count(uid) == 0) {
 			return std::nullopt;
 		}
 		return icache[uid];
@@ -142,6 +146,11 @@ public:
 		}
 		return functor_type;
 	}
+	
+	IRBuilder<>& operator()(){
+		return builder_;
+	}
+	
 
 private:
 	static inline std::uint64_t get_uid(uint32_t cr3, uint32_t vaddr) {
@@ -169,7 +178,7 @@ private:
 		}
 	}
 	
-	Value* get_cpu_reg_ptr(int id){
+	Value *get_cpu_reg_ptr(int id) {
 		auto reg_ptr = builder_.CreateConstGEP1_32(s_.regfile, id);
 		return reg_ptr;
 	}
@@ -178,6 +187,7 @@ private:
 		State() {
 			this->clear();
 		}
+		
 		int inst_count;
 		uint64_t uid;
 		std::unique_ptr<Module> mod;
@@ -190,7 +200,7 @@ private:
 		
 		void clear() {
 			inst_count = 0;
-			uid = (uint64_t)-1;
+			uid = (uint64_t) -1;
 			assert(!mod); // should always been cleared
 			value_cache.clear();
 			std::fill(reg_cache.begin(), reg_cache.end(), std::make_pair(nullptr, false));
