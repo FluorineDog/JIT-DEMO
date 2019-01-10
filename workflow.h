@@ -20,12 +20,12 @@
 
 using rtlreg_t = uint32_t;
 
-namespace llvm {
-
 struct CPUState {
 	uint32_t val[20];
 	uint32_t fuck[20];
 } cpu;
+
+namespace llvm {
 
 class CodeExecutor {
 private:
@@ -42,12 +42,13 @@ public:
 		LLVMInitializeNativeAsmPrinter();
 	}
 	
-	void prepareFunctionAt(uint32_t cr3, uint32_t vaddr) {
+	void begin_block(uint32_t cr3, uint32_t vaddr) {
 		// clear state;
-		s_ = State();
+		s_.clear();
 		
 		auto uid = get_uid(cr3, vaddr);
 		auto name = get_name(uid);
+		s_.uid = uid;
 		s_.mod = std::make_unique<Module>(name, ctx_);
 		s_.func = cast<Function>(s_.mod->getOrInsertFunction(name, getFunctorTy()));
 		s_.bb = BasicBlock::Create(ctx_, "entry", s_.func);
@@ -57,30 +58,33 @@ public:
 		s_.regfile = &*iter;
 		++iter;
 		s_.memory = &*iter;
+		++iter;
+		assert(iter == s_.func->arg_end());
 	}
 	
 	LLVMContext &get_ctx() {
 		return ctx_;
 	}
 	
-	static std::optional<int> is_cpu(rtlreg_t *reg) {
-		if ((rtlreg_t *) &cpu <= reg && reg < (rtlreg_t *) (&cpu + 1)) {
-			return reg - (rtlreg_t *) &cpu;
+	void set_value(rtlreg_t *reg, Value *value) {
+		if (auto reg_id = is_cpu(reg)) {
+			int id = reg_id.value();
+#if 0
+			auto reg_ptr = get_cpu_reg_ptr(id);
+			builder_.CreateStore(value, reg_ptr);
+#endif
+			// dirty now
+			s_.reg_cache[id] = std::make_pair(value, true);
 		} else {
-			return std::nullopt;
+			s_.value_cache[reg] = value;
 		}
-	}
-	
-	
-	void set_value(rtlreg_t *reg, Value *) {
-		
 	}
 	
 	Value *get_value(rtlreg_t *reg) {
 		if (auto reg_id = is_cpu(reg)) {
 			int id = reg_id.value();
 			if (s_.reg_cache[id].first == nullptr) {
-				auto reg_ptr = builder_.CreateConstGEP1_32(s_.regfile, id);
+				auto reg_ptr = get_cpu_reg_ptr(id);
 				// not dirty yet
 				s_.reg_cache[id] = std::make_pair(builder_.CreateLoad(reg_ptr), false);
 			}
@@ -92,8 +96,32 @@ public:
 		}
 	}
 	
-	void fetchFunctionAt(uint32_t cr3, uint32_t vaddr) {
-		
+	void finish_inst() {
+	    s_.inst_count++;
+	}
+	
+	void finish_block() {
+		for (int id = 0; id < s_.reg_cache.size(); ++id) {
+			auto [value, dirty] = s_.reg_cache[id];
+			if(dirty){
+				auto reg_ptr = get_cpu_reg_ptr(id);
+				builder_.CreateStore(value, reg_ptr);
+			}
+		}
+		builder_.CreateRet(builder_.getInt32(s_.inst_count));
+		auto err = jit_->addModule(std::move(s_.mod));
+		assert(!err);
+		auto uid = s_.uid;
+		assert(uid != (uint64_t)-1);
+		assert(icache.count(uid) == 0);
+		auto symbol = this->jit_->lookup(get_name(uid));
+		icache[uid].first = (RawFT)cantFail(std::move(symbol)).getAddress();
+		icache[uid].second = s_.inst_count;
+		s_.clear();
+	}
+	
+	std::optional<RawFT*> fetchFunction(uint32_t cr3, uint32_t vaddr) {
+		return std::nullopt;
 	}
 	
 	Type *getRegTy() {
@@ -127,16 +155,45 @@ private:
 private:
 	std::unique_ptr<orc::KaleidoscopeJIT> jit_;
 	LLVMContext ctx_;
-	std::unordered_map<uint64_t, std::pair<RawFT *, int>> icache;
+	std::unordered_map<uint64_t, std::pair<RawFT, int>> icache;
+	
+	static std::optional<int> is_cpu(rtlreg_t *reg) {
+		if ((rtlreg_t *) &cpu <= reg && reg < (rtlreg_t *) (&cpu + 1)) {
+			return reg - (rtlreg_t *) &cpu;
+		} else {
+			return std::nullopt;
+		}
+	}
+	
+	Value* get_cpu_reg_ptr(int id){
+		auto reg_ptr = builder_.CreateConstGEP1_32(s_.regfile, id);
+		return reg_ptr;
+	}
 	
 	struct State {
+		State() {
+			this->clear();
+		}
+		int inst_count;
+		uint64_t uid;
 		std::unique_ptr<Module> mod;
 		std::unordered_map<rtlreg_t *, Value *> value_cache;
-		BasicBlock *bb;
 		std::array<std::pair<Value *, bool>, sizeof(CPUState) / sizeof(rtlreg_t)> reg_cache;
+		BasicBlock *bb;
 		Function *func;
 		Value *regfile;
 		Value *memory;
+		
+		void clear() {
+			inst_count = 0;
+			uid = (uint64_t)-1;
+			assert(!mod); // should always been cleared
+			value_cache.clear();
+			std::fill(reg_cache.begin(), reg_cache.end(), std::make_pair(nullptr, false));
+			bb = nullptr;
+			func = nullptr;
+			regfile = memory = nullptr;
+		}
 	} s_;
 	
 	IRBuilder<> builder_;
