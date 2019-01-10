@@ -53,7 +53,7 @@ public:
 		auto uid = get_uid(cr3, vaddr);
 		auto name = get_name(uid);
 		s_.uid = uid;
-		s_.mod = std::make_unique<Module>(name, ctx_);
+		s_.mod = std::make_unique<Module>("mod_" + name, ctx_);
 		s_.func = cast<Function>(s_.mod->getOrInsertFunction(name, getFunctorTy()));
 		s_.bb = BasicBlock::Create(ctx_, "entry", s_.func);
 		builder_.SetInsertPoint(s_.bb);

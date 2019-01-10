@@ -65,16 +65,15 @@ void functor() {
 }
 
 void jump(){
-	assert(decoding.ori_eip == 1000 + 2);
+	assert(decoding.ori_eip == 1000 + 3);
 	rtl_j(1000);
 }
 
 void exec(void (*inst)()) {
-	auto state = decoding.state;
 	auto& ori_eip = decoding.ori_eip;
 	auto& eng = decoding.executor;
 	
-	switch(state){
+	switch(decoding.state){
 		case JITState::Init:{
 			assert(ori_eip == 1000);
 			if(auto query = eng.fetchFunction(0, ori_eip)){
@@ -97,12 +96,13 @@ void exec(void (*inst)()) {
 		}
 	}
 	
-	inst();
+	assert(decoding.state == JITState::Compiling);
 	decoding.ori_eip += 1;
+	inst();
 	eng.finish_inst();
 	
 	if(decoding.state == JITState::Terminate){
-		state = JITState::Init;
+		decoding.state = JITState::Init;
 		eng.finish_block();
 	}
 }
@@ -111,15 +111,17 @@ int main() {
 	using llvm::CodeExecutor;
 	CodeExecutor::InitEnvironment();
 	decoding.executor.init();
-	cpu.val[3] = 1000;
+	cpu.val[3] = 5;
 	cpu.fuck[0] = 2;
 	uint32_t cr3 = 0;
-	uint32_t addr = 1000;
 	decoding.ori_eip = 1000;
 	
 	for(int i = 0; i < 100; ++i){
-		assert(addr == 1000);
+		assert(decoding.ori_eip == 1000);
 		exec(functor);
+		if(decoding.ori_eip == 1000){
+			continue;
+		}
 		exec(functor);
 		exec(jump);
 	}
