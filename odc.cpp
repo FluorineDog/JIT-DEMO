@@ -58,10 +58,12 @@ int fuck() {
 using namespace llvm;
 
 int main() {
+	LLVMContext Context;
+    
+    IRBuilder<> builder(Context);
     LLVMInitializeNativeTarget();
     LLVMInitializeNativeAsmPrinter();
 
-    LLVMContext Context;
 
     // Create some module to put our function into it.
     std::unique_ptr<Module> Owner = make_unique<Module>("test", Context);
@@ -75,10 +77,10 @@ int main() {
     // Add a basic block to the function. As before, it automatically inserts
     // because of the last argument.
     BasicBlock *BB = BasicBlock::Create(Context, "EntryBlock", Add1F);
+    builder.SetInsertPoint(BB);
 
     // Create a basic block builder with default parameters.  The builder will
     // automatically append instructions to the basic block `BB'.
-    IRBuilder<> builder(BB);
 
     // Get pointers to the constant `1'.
     Value *One = builder.getInt32(1);

@@ -23,7 +23,8 @@ using rtlreg_t = uint32_t;
 struct CPUState {
 	uint32_t val[20];
 	uint32_t fuck[20];
-} cpu;
+};
+extern CPUState cpu;
 
 namespace llvm {
 
@@ -34,10 +35,13 @@ private:
 
 public:
 	CodeExecutor() : builder_(ctx_) {
-		this->jit_ = cantFail(orc::KaleidoscopeJIT::Create());
 	};
 	
-	static void initEnvironment() {
+	void init() {
+		this->jit_ = cantFail(orc::KaleidoscopeJIT::Create());
+	}
+	
+	static void InitEnvironment() {
 		LLVMInitializeNativeTarget();
 		LLVMInitializeNativeAsmPrinter();
 	}
@@ -113,12 +117,14 @@ public:
 			}
 		}
 		builder_.CreateRet(builder_.getInt32(s_.inst_count));
+		outs() << *s_.mod;
 		auto err = jit_->addModule(std::move(s_.mod));
 		assert(!err);
 		auto uid = s_.uid;
 		assert(uid != (uint64_t) -1);
 		assert(icache.count(uid) == 0);
-		auto symbol = this->jit_->lookup(get_name(uid));
+		auto name = get_name(uid);
+		auto symbol = this->jit_->lookup(name);
 		icache[uid].first = (RawFT) cantFail(std::move(symbol)).getAddress();
 		icache[uid].second = s_.inst_count;
 		s_.clear();
@@ -147,10 +153,10 @@ public:
 		return functor_type;
 	}
 	
-	IRBuilder<>& operator()(){
+	IRBuilder<> &operator()() {
 		return builder_;
 	}
-	
+
 
 private:
 	static inline std::uint64_t get_uid(uint32_t cr3, uint32_t vaddr) {
@@ -164,6 +170,7 @@ private:
 	static inline std::string get_name(uint32_t cr3, uint32_t vaddr) {
 		return get_name(get_uid(cr3, vaddr));
 	}
+
 
 private:
 	std::unique_ptr<orc::KaleidoscopeJIT> jit_;

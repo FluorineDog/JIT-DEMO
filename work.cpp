@@ -5,6 +5,8 @@
 #include "workflow.h"
 #include <iostream>
 
+CPUState cpu;
+
 using std::cout;
 
 enum class JITState{
@@ -21,6 +23,8 @@ struct ExecState{
 }decoding;
 
 void rtl_add(rtlreg_t *dest, rtlreg_t *a, rtlreg_t *b){
+	*dest = *a + *b;
+	
 	auto& eng = decoding.executor;
 	auto va = eng.get_value(a);
 	auto vb = eng.get_value(b);
@@ -28,15 +32,22 @@ void rtl_add(rtlreg_t *dest, rtlreg_t *a, rtlreg_t *b){
 	eng.set_value(dest, vc);
 }
 
-void rtl_li(rtlreg_t *dest, uint32_t imm);
+void rtl_li(rtlreg_t *dest, uint32_t imm){
+	*dest = imm;
+	
+	auto& eng = decoding.executor;
+	auto vimm = eng().getInt32(imm);
+	eng.set_value(dest, vimm);
+}
 
-void rtl_j(uint32_t imm);
-
-
+void rtl_j(uint32_t imm){
+	
+	decoding.ori_eip = imm;
+	decoding.state = JITState::Terminate;
+}
 
 void functor() {
 	rtlreg_t init;
-	rtl_li(&init, 100);
 	rtl_add(cpu.val + 3, cpu.val + 3, cpu.fuck);
 	rtl_add(cpu.val + 3, cpu.val + 3, cpu.fuck);
 	rtl_add(cpu.val + 3, cpu.val + 3, cpu.fuck);
@@ -54,26 +65,28 @@ void functor() {
 }
 
 void jump(){
+	assert(decoding.ori_eip == 1000 + 2);
 	rtl_j(1000);
-	decoding.state = JITState::Terminate;
 }
 
 void exec(void (*inst)()) {
-	auto& state = decoding.state;
+	auto state = decoding.state;
 	auto& ori_eip = decoding.ori_eip;
-	auto& executor = decoding.executor;
+	auto& eng = decoding.executor;
 	
 	switch(state){
 		case JITState::Init:{
-			
-			if(auto query = executor.fetchFunction(0, ori_eip)){
+			assert(ori_eip == 1000);
+			if(auto query = eng.fetchFunction(0, ori_eip)){
 				auto [func, expected_inst]  = query.value();
 				auto real_inst = func((uint32_t*)&cpu, nullptr);
+				assert(expected_inst == real_inst);
+				decoding.ori_eip = 1000;
 				return;
 			}
 			
-			executor.begin_block(0, ori_eip);
-			state = JITState::Compiling;
+			eng.begin_block(0, ori_eip);
+			decoding.state = JITState::Compiling;
 			break;
 		}
 		case JITState::Compiling:{
@@ -83,30 +96,34 @@ void exec(void (*inst)()) {
 			assert(0);
 		}
 	}
+	
 	inst();
-	if(state == JITState::Terminate){
+	decoding.ori_eip += 1;
+	eng.finish_inst();
+	
+	if(decoding.state == JITState::Terminate){
 		state = JITState::Init;
+		eng.finish_block();
 	}
 }
 
 int main() {
 	using llvm::CodeExecutor;
-	cpu.val[3] = 100;
+	CodeExecutor::InitEnvironment();
+	decoding.executor.init();
+	cpu.val[3] = 1000;
 	cpu.fuck[0] = 2;
 	uint32_t cr3 = 0;
 	uint32_t addr = 1000;
 	decoding.ori_eip = 1000;
-	CodeExecutor::initEnvironment();
 	
 	for(int i = 0; i < 100; ++i){
+		assert(addr == 1000);
 		exec(functor);
 		exec(functor);
-		exec(functor);	
-		exec(jump);	
+		exec(jump);
 	}
 	
-	CodeExecutor::initEnvironment();
-	CodeExecutor ce;
-	(void) ce.getFunctorTy();
+	std::cout << cpu.val[3];
 	return 0;
 }
