@@ -120,8 +120,12 @@ public:
 		s_.clear();
 	}
 	
-	std::optional<RawFT*> fetchFunction(uint32_t cr3, uint32_t vaddr) {
-		return std::nullopt;
+	std::optional<std::pair<RawFT, int>> fetchFunction(uint32_t cr3, uint32_t vaddr) {
+		auto uid = get_uid(cr3, vaddr);
+		if(icache.count(uid) == 0){
+			return std::nullopt;
+		}
+		return icache[uid];
 	}
 	
 	Type *getRegTy() {
