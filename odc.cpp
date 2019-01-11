@@ -113,7 +113,7 @@ int main() {
     {
         auto FT = FunctionType::get(builder.getInt32Ty(), {}, false);
         auto FuncAddr = builder.getInt64((size_t)fuck);
-        auto F = builder.CreateIntToPtr(FuncAddr, FT->getPointerTo());
+         auto F = builder.CreateIntToPtr(FuncAddr, FT->getPointerTo());
         auto val = builder.CreateCall(F);
         CallInst *Add1CallRes = builder.CreateCall(Add1F, val);
         Add1CallRes->setTailCall(true);
