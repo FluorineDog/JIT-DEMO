@@ -28,7 +28,7 @@ add_executable(work work.cpp)
 llvm_map_components_to_libnames(llvm_libs all)
 
 # Link against LLVM libraries
-target_link_libraries(main ${llvm_libs})
-target_link_libraries(odc ${llvm_libs})
-target_link_libraries(work ${llvm_libs})
+target_link_libraries(main LLVM)
+target_link_libraries(odc LLVM)
+target_link_libraries(work LLVM)
 

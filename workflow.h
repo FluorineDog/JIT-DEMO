@@ -54,7 +54,7 @@ public:
 		auto name = get_name(uid);
 		s_.uid = uid;
 		s_.mod = std::make_unique<Module>("mod_" + name, ctx_);
-		s_.func = cast<Function>(s_.mod->getOrInsertFunction(name, getFunctorTy()));
+		s_.func = Function::Create(getFunctorTy(), GlobalValue::ExternalLinkage, name, s_.mod.get());
 		s_.bb = BasicBlock::Create(ctx_, "entry", s_.func);
 		builder_.SetInsertPoint(s_.bb);
 		assert(s_.func->arg_size() == 2);

@@ -42,7 +42,7 @@ class KaleidoscopeJIT {
           Mangle(ES, this->DL),
           Ctx(llvm::make_unique<LLVMContext>()) {
         ES.getMainJITDylib().setGenerator(
-            cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(DL)));
+            cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(DL.getGlobalPrefix())));
     }
 
     const DataLayout &getDataLayout() const {
